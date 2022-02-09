@@ -203,4 +203,4 @@ def matcher(image1, image2, outimg, focallength1, focallength2, model, hyps, mod
 
   cv2.imwrite(outimg, match_img)
   print("\nDone. Visualization of the result stored as", outimg)
-  return out_inliers, good_matches, kp1,kp1
+  return out_inliers, good_matches, kp1,kp2
