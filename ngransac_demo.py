@@ -12,7 +12,7 @@ import ngransac
 from network import CNNet
 from dataset import SparseDataset
 import util
-from google.colab.patches import cv2_imshow
+# from google.colab.patches import cv2_imshow
 
 
 # parser = util.create_parser('NG-RANSAC demo for a user defined image pair. Fits an essential matrix (default) or fundamental matrix (-fmat) using OpenCV RANSAC vs. NG-RANSAC.')
@@ -67,12 +67,12 @@ def matcher(image1, image2, outimg, focallength1, focallength2, model, hyps, mod
   img1 = cv2.imread(image1)
   img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
   img1 = cv2.resize(img1, ((int(img1.shape[1]*0.2)), (int(img1.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
-  cv2_imshow(img1)
+  # cv2.imshow('', img1)
 
   img2 = cv2.imread(image2)
   img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
   img2 = cv2.resize(img2, ((int(img2.shape[1]*0.2)), (int(img2.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
-  cv2_imshow(img2)
+  # cv2.imshow('', img2)
   # calibration matrices of image 1 and 2, principal point assumed to be at the center
   K1 = np.eye(3)
   K1[0,0] = K1[1,1] = focallength1
@@ -198,9 +198,9 @@ def matcher(image1, image2, outimg, focallength1, focallength2, model, hyps, mod
   match_img_ransac = cv2.drawMatches(img1, kp1, img2, kp2, good_matches, None, flags=2, matchColor=(75,180,60), matchesMask = ransac_inliers)
   match_img_ngransac = cv2.drawMatches(img1, kp1, img2, kp2, good_matches, None, flags=2, matchColor=(200,130,0), matchesMask = out_inliers)
   match_img = np.concatenate((match_img_ransac, match_img_ngransac), axis = 0)
-  cv2_imshow(match_img_ransac)
-  cv2_imshow(match_img_ngransac)
+  cv2.imwrite('./output/ransac_op.png', match_img_ransac)
+  cv2.imwrite('./output/ng_op.png', match_img_ngransac)
 
-  cv2.imwrite(outimg, match_img)
-  print("\nDone. Visualization of the result stored as", outimg)
+  cv2.imwrite('./output/combined_res.png', match_img)
+  print("\nDone. Visualization of the result stored in the output folder.", outimg)
   return out_inliers, good_matches, kp1,kp2
