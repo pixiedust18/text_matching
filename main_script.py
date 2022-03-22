@@ -113,111 +113,110 @@ def test_net(net, image, text_threshold, link_threshold, low_text, cuda, poly, r
 
     return boxes, polys, ret_score_text
 
+def predict(img1_pth = './images/2_a.jpg', img2_pth = './images/2_b.jpg', pretrained_model = './models/craft_mlt_25k.pth'):
+  inlier_mask, all_matches, kp1, kp2 = matcher(img1_pth, img2_pth, 'matching_op.png', 900, 900, '', 1000, './models/weights_e2e_E_r1.00_.net', False)
 
-img1_pth = './images/2_a.jpg'
-img2_pth = './images/2_b.jpg'
-pretrained_model = './models/craft_mlt_25k.pth'
-inlier_mask, all_matches, kp1, kp2 = matcher(img1_pth, img2_pth, 'matching_op.png', 900, 900, '', 1000, './models/weights_e2e_E_r1.00_.net', False)
+  good_matches = []
+  for i in range(len(all_matches)):
+    if inlier_mask[i] == 1:
+      good_matches.append(all_matches[i])
 
-good_matches = []
-for i in range(len(all_matches)):
-  if inlier_mask[i] == 1:
-    good_matches.append(all_matches[i])
-
-point_corresp = []
-for match in good_matches:
-  p1 = kp1[match.queryIdx].pt
-  p2 = kp2[match.trainIdx].pt
-  point_corresp.append((p1,p2))
-  
-  
-net = CRAFT()     # initialize
-
-# print('Loading weights from checkpoint (' + a + ')')
-# if args.cuda:
-net.load_state_dict(copyStateDict(torch.load(pretrained_model)))
-# else:
-#     net.load_state_dict(copyStateDict(torch.load(model, map_location='cpu')))
-
-# if args.cuda:
-net = net.cuda()
-net = torch.nn.DataParallel(net)
-cudnn.benchmark = False
-
-net.eval()
+  point_corresp = []
+  for match in good_matches:
+    p1 = kp1[match.queryIdx].pt
+    p2 = kp2[match.trainIdx].pt
+    point_corresp.append((p1,p2))
 
 
-# t = time.time()
+  net = CRAFT()     # initialize
+
+  # print('Loading weights from checkpoint (' + a + ')')
+  # if args.cuda:
+  net.load_state_dict(copyStateDict(torch.load(pretrained_model)))
+  # else:
+  #     net.load_state_dict(copyStateDict(torch.load(model, map_location='cpu')))
+
+  # if args.cuda:
+  net = net.cuda()
+  net = torch.nn.DataParallel(net)
+  cudnn.benchmark = False
+
+  net.eval()
 
   # load data
 
-image1 = cv2.imread(img1_pth)
-print(image1.shape)
-image1 = cv2.resize(image1, ((int(image1.shape[1]*0.2)), (int(image1.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
-print(image1.shape)
-# cv2.imwrite(img1.split('.')[0] + 'resized.' + img1.split('.')[1], i1)
+  image1 = cv2.imread(img1_pth)
+  print(image1.shape)
+  image1 = cv2.resize(image1, ((int(image1.shape[1]*0.2)), (int(image1.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
+  print(image1.shape)
+  # cv2.imwrite(img1.split('.')[0] + 'resized.' + img1.split('.')[1], i1)
 
-image2 = cv2.imread(img2_pth)
-print(image2.shape)
-image2 = cv2.resize(image2, ((int(image2.shape[1]*0.2)), (int(image2.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
-# cv2.imwrite(img2.split('.')[0] + 'resized.' + img2.split('.')[1], i2)
-print(image2.shape)
-# img1 = img1.split('.')[0] + 'resized.' + img1.split('.')[1]
-# img2 = img2.split('.')[0] + 'resized.' + img2.split('.')[1]
+  image2 = cv2.imread(img2_pth)
+  print(image2.shape)
+  image2 = cv2.resize(image2, ((int(image2.shape[1]*0.2)), (int(image2.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
+  # cv2.imwrite(img2.split('.')[0] + 'resized.' + img2.split('.')[1], i2)
+  print(image2.shape)
+  # img1 = img1.split('.')[0] + 'resized.' + img1.split('.')[1]
+  # img2 = img2.split('.')[0] + 'resized.' + img2.split('.')[1]
 
-# image1 = imgproc.loadImage(img1)
-# image2 = imgproc.loadImage(img2)
+  # image1 = imgproc.loadImage(img1)
+  # image2 = imgproc.loadImage(img2)
 
-bboxes1, polys1, score_text1 = test_net(net, image1, 0.4, 0.4, 0.4, True, False, None)
-bboxes2, polys2, score_text2 = test_net(net, image2, 0.4, 0.4, 0.4, True, False, None)
+  bboxes1, polys1, score_text1 = test_net(net, image1, 0.4, 0.4, 0.4, True, False, None)
+  bboxes2, polys2, score_text2 = test_net(net, image2, 0.4, 0.4, 0.4, True, False, None)
 
+
+
+  polys1_dict = {}
+  count1 = 0
+  for matches1 in polys1:
+    polys1_dict['a' + str(count1)] = matches1.astype('int16')
+    count1 +=1
+
+  polys2_dict = {}
+  count2 = 0
+  for matches2 in polys2:
+    polys2_dict['b' + str(count2)] = matches2.astype('int16')
+    count2 +=1
+
+  relational_matrix = pd.DataFrame(np.zeros((len(polys2_dict), len(polys1_dict))), columns = polys1_dict.keys(), index= polys2_dict.keys())
+
+
+
+  for corresp in point_corresp:
+    box_id1 = find_box(corresp[0], polys1_dict)
+    box_id2 = find_box(corresp[1], polys2_dict)
+    if box_id1 == -1 or box_id2 == -1:
+      continue
+    else:
+      relational_matrix[box_id1][box_id2] +=1
+
+  print(relational_matrix)
+
+  final_corresp_boxes = []
+  for column in relational_matrix:
+    max_idx = relational_matrix[column].idxmax()
+    max_val = relational_matrix[column].max()
+    if max_val > 0:
+      corr = (column, max_idx)
+      final_corresp_boxes.append(corr)
+
+  print(final_corresp_boxes[:5])
+
+
+  from google.colab.patches import cv2_imshow
+  for c in final_corresp_boxes:
+    first, second = c
+    bx1 = polys1_dict[first].reshape((-1, 1, 2))
+    bx2 = polys2_dict[second].reshape((-1, 1, 2))
+    color = generate_random_colour()
+    image1 = cv2.polylines(image1, np.int32([bx1]), True, color, 4)
+    image2 = cv2.polylines(image2, np.int32([bx2]), True, color, 4)
+    
+    return image1, image2
   
-
-polys1_dict = {}
-count1 = 0
-for matches1 in polys1:
-  polys1_dict['a' + str(count1)] = matches1.astype('int16')
-  count1 +=1
-
-polys2_dict = {}
-count2 = 0
-for matches2 in polys2:
-  polys2_dict['b' + str(count2)] = matches2.astype('int16')
-  count2 +=1
-
-relational_matrix = pd.DataFrame(np.zeros((len(polys2_dict), len(polys1_dict))), columns = polys1_dict.keys(), index= polys2_dict.keys())
-
-
-
-for corresp in point_corresp:
-  box_id1 = find_box(corresp[0], polys1_dict)
-  box_id2 = find_box(corresp[1], polys2_dict)
-  if box_id1 == -1 or box_id2 == -1:
-    continue
-  else:
-    relational_matrix[box_id1][box_id2] +=1
-
-print(relational_matrix)
-
-final_corresp_boxes = []
-for column in relational_matrix:
-  max_idx = relational_matrix[column].idxmax()
-  max_val = relational_matrix[column].max()
-  if max_val > 0:
-    corr = (column, max_idx)
-    final_corresp_boxes.append(corr)
-
-print(final_corresp_boxes[:5])
-
-
-# from google.colab.patches import cv2_imshow
-for c in final_corresp_boxes:
-  first, second = c
-  bx1 = polys1_dict[first].reshape((-1, 1, 2))
-  bx2 = polys2_dict[second].reshape((-1, 1, 2))
-  color = generate_random_colour()
-  image1 = cv2.polylines(image1, np.int32([bx1]), True, color, 4)
-  image2 = cv2.polylines(image2, np.int32([bx2]), True, color, 4)
-
-cv2.imwrite('./output/final_op1.png', image1)
-cv2.imwrite('./output/final_op2.png', image2)
+  
+if __name__ == "__main__":
+  image1, image2 = predict()
+  cv2.imwrite('./output/final_op1.png', image1)
+  cv2.imwrite('./output/final_op2.png', image2)
