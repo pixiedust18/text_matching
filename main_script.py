@@ -8,7 +8,7 @@ import matplotlib
 import matplotlib.pylab as plt
 plt.rcParams["axes.grid"] = False
 import os
-
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -24,10 +24,21 @@ import craft.imgproc
 # import craft.file_utils
 import json
 import zipfile
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
+
 
 from craft.craft import CRAFT
 from collections import OrderedDict
 
+import random
+
+def generate_random_colour():
+  r = random.randint(0,255)
+  g = random.randint(0,255)
+  b = random.randint(0,255)
+  rgb = (r,g,b)
+  return rgb
 
 def copyStateDict(state_dict):
     if list(state_dict.keys())[0].startswith("module"):
@@ -39,6 +50,17 @@ def copyStateDict(state_dict):
         name = ".".join(k.split(".")[start_idx:])
         new_state_dict[name] = v
     return new_state_dict
+    
+def find_box(point_coord, poly_dict):
+  for box_id in poly_dict.keys():
+    box = poly_dict[box_id]
+    point = Point(point_coord)
+    polygon = Polygon([tuple(box[0]), tuple(box[1]), tuple(box[2]), tuple(box[3])])
+    if polygon.contains(point):
+      return box_id
+    else:
+      continue
+  return -1
 
 def test_net(net, image, text_threshold, link_threshold, low_text, cuda, poly, refine_net=None):
     t0 = time.time()
@@ -92,8 +114,8 @@ def test_net(net, image, text_threshold, link_threshold, low_text, cuda, poly, r
     return boxes, polys, ret_score_text
 
 
-img1_pth = './images/demo1.jpg'
-img2_pth = './images/demo2.jpg'
+img1_pth = './images/2_a.jpg'
+img2_pth = './images/2_b.jpg'
 pretrained_model = './models/craft_mlt_25k.pth'
 inlier_mask, all_matches, kp1, kp2 = matcher(img1_pth, img2_pth, 'matching_op.png', 900, 900, '', 1000, './models/weights_e2e_E_r1.00_.net', False)
 
@@ -129,7 +151,6 @@ net.eval()
 
   # load data
 
-import cv2
 image1 = cv2.imread(img1_pth)
 print(image1.shape)
 image1 = cv2.resize(image1, ((int(image1.shape[1]*0.2)), (int(image1.shape[0]*0.2))), interpolation = cv2.INTER_AREA)
@@ -152,5 +173,51 @@ bboxes2, polys2, score_text2 = test_net(net, image2, 0.4, 0.4, 0.4, True, False,
 
   
 
+polys1_dict = {}
+count1 = 0
+for matches1 in polys1:
+  polys1_dict['a' + str(count1)] = matches1.astype('int16')
+  count1 +=1
+
+polys2_dict = {}
+count2 = 0
+for matches2 in polys2:
+  polys2_dict['b' + str(count2)] = matches2.astype('int16')
+  count2 +=1
+
+relational_matrix = pd.DataFrame(np.zeros((len(polys2_dict), len(polys1_dict))), columns = polys1_dict.keys(), index= polys2_dict.keys())
 
 
+
+for corresp in point_corresp:
+  box_id1 = find_box(corresp[0], polys1_dict)
+  box_id2 = find_box(corresp[1], polys2_dict)
+  if box_id1 == -1 or box_id2 == -1:
+    continue
+  else:
+    relational_matrix[box_id1][box_id2] +=1
+
+print(relational_matrix)
+
+final_corresp_boxes = []
+for column in relational_matrix:
+  max_idx = relational_matrix[column].idxmax()
+  max_val = relational_matrix[column].max()
+  if max_val > 0:
+    corr = (column, max_idx)
+    final_corresp_boxes.append(corr)
+
+print(final_corresp_boxes[:5])
+
+
+# from google.colab.patches import cv2_imshow
+for c in final_corresp_boxes:
+  first, second = c
+  bx1 = polys1_dict[first].reshape((-1, 1, 2))
+  bx2 = polys2_dict[second].reshape((-1, 1, 2))
+  color = generate_random_colour()
+  image1 = cv2.polylines(image1, np.int32([bx1]), True, color, 4)
+  image2 = cv2.polylines(image2, np.int32([bx2]), True, color, 4)
+
+cv2.imwrite('./output/final_op1.png', image1)
+cv2.imwrite('./output/final_op2.png', image2)
